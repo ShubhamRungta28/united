@@ -1,12 +1,16 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from fastapi.responses import JSONResponse
 # import imghdr # Removed imghdr
 import os
 from PIL import Image # Import Pillow
+from sqlalchemy.orm import Session
+from typing import List
 
-from backend.auth.auth_handler import get_current_active_user
-from backend.schemas import UserResponse
+from backend.auth.auth_handler import get_current_active_user, get_current_admin_user
+from backend.database import get_db
+from backend.schemas import UserCredentialSchema, UserCreate, UserCreateAdmin
 from backend.models import UserCredential
+from backend.auth.utils import get_password_hash
 
 router = APIRouter()
 
@@ -32,12 +36,12 @@ def is_valid_image(file_path):
         print(f"An unexpected error occurred during image validation: {e}")
         return False
 
-@router.get("/users/me/", response_model=UserResponse)
-async def read_users_me(current_user: UserCredential = Depends(get_current_active_user)):
+@router.get("/users/me/", response_model=UserCredentialSchema)
+async def read_users_me(current_user: UserCredentialSchema = Depends(get_current_active_user)):
     return current_user
 
 @router.post("/upload-image")
-async def upload_image(file: UploadFile = File(...), current_user: UserCredential = Depends(get_current_active_user)):
+async def upload_image(file: UploadFile = File(...), current_user: UserCredentialSchema = Depends(get_current_active_user)):
     # Ensure the 'uploads' directory exists
     uploads_dir = "uploads"
     if not os.path.exists(uploads_dir):
@@ -83,4 +87,70 @@ async def upload_image(file: UploadFile = File(...), current_user: UserCredentia
         "message": "Image uploaded successfully.",
         "filename": file.filename,
         "path": final_path
-    }) 
+    })
+
+# Admin Only Endpoints
+
+@router.get("/users/", response_model=List[UserCredentialSchema])
+async def get_all_users(db: Session = Depends(get_db), current_user: UserCredentialSchema = Depends(get_current_admin_user)):
+    users = db.query(UserCredential).all()
+    return users
+
+@router.post("/users/", response_model=UserCredentialSchema, status_code=status.HTTP_201_CREATED)
+async def create_user_by_admin(user: UserCreateAdmin, db: Session = Depends(get_db), current_user: UserCredentialSchema = Depends(get_current_admin_user)):
+    db_user = db.query(UserCredential).filter(UserCredential.username == user.username).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered.")
+    db_user = db.query(UserCredential).filter(UserCredential.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered.")
+    
+    hashed_password = get_password_hash(user.password)
+    db_user = UserCredential(username=user.username, email=user.email, hashed_password=hashed_password, role=user.role, status=user.status)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@router.put("/users/approve/{user_id}", response_model=UserCredentialSchema)
+async def approve_user(user_id: int, db: Session = Depends(get_db), current_user: UserCredentialSchema = Depends(get_current_admin_user)):
+    user = db.query(UserCredential).filter(UserCredential.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if user.status == "approved":
+        raise HTTPException(status_code=400, detail="User already approved.")
+    user.status = "approved"
+    db.commit()
+    db.refresh(user)
+    return user
+
+@router.put("/users/reject/{user_id}", response_model=UserCredentialSchema)
+async def reject_user(user_id: int, db: Session = Depends(get_db), current_user: UserCredentialSchema = Depends(get_current_admin_user)):
+    user = db.query(UserCredential).filter(UserCredential.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    if user.status == "rejected":
+        raise HTTPException(status_code=400, detail="User already rejected.")
+    user.status = "rejected"
+    db.commit()
+    db.refresh(user)
+    return user
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: int, db: Session = Depends(get_db), current_user: UserCredentialSchema = Depends(get_current_admin_user)):
+    user = db.query(UserCredential).filter(UserCredential.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+    db.delete(user)
+    db.commit()
+    return
+
+@router.delete("/users/me/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_my_user(db: Session = Depends(get_db), current_user: UserCredentialSchema = Depends(get_current_active_user)):
+    user_to_delete = db.query(UserCredential).filter(UserCredential.id == current_user.id).first()
+    if not user_to_delete:
+        # This case should ideally not be reached if current_user is valid
+        raise HTTPException(status_code=404, detail="User not found.")
+    db.delete(user_to_delete)
+    db.commit()
+    return 

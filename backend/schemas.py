@@ -1,6 +1,7 @@
 # schemas.py
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, EmailStr
 from datetime import datetime
+from typing import Optional
 
 
 class Token(BaseModel):
@@ -9,13 +10,13 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    username: str | None = None
+    username: Optional[str] = None
 
 
 class UserCreate(BaseModel):
-    username: str = Field(..., min_length=3)
-    email: str
-    password: str = Field(..., min_length=8)
+    username: str
+    email: EmailStr
+    password: str
 
     @validator('email')
     def validate_email_domain(cls, v):
@@ -39,7 +40,7 @@ class UserResponse(BaseModel):
     username: str
     email: str | None = None
 
-class UserInDB(UserResponse):
+class UserCredentialInDB(UserResponse):
     hashed_password: str
 
 class UploadRecordBase(BaseModel):
@@ -69,4 +70,22 @@ class PaginatedUploadRecords(BaseModel):
     total: int
     page: int
     size: int
-    items: list[UploadRecordResponse] 
+    items: list[UploadRecordResponse]
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+class UserCredentialSchema(BaseModel):
+    id: int
+    username: str
+    email: EmailStr
+    role: str
+    status: str
+
+    class Config:
+        from_attributes = True
+
+class UserCreateAdmin(UserCreate):
+    role: str = "user"
+    status: str = "pending" 

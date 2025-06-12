@@ -19,7 +19,7 @@ const ConfirmationPage = () => {
                 Registration Successful!
             </Typography>
             <Typography variant="body1" sx={{ mb: 3 }}>
-                Thank you for registering. Your account has been successfully created.
+                Thank you for registering. Your account has been successfully created and is pending approval by an administrator. You will be able to log in once your account is approved.
             </Typography>
             <Button
                 variant="contained"

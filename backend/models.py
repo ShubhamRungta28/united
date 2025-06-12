@@ -1,17 +1,18 @@
 # models.py
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, Enum
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
+from backend.base import Base
 
-Base = declarative_base()
 
 class UserCredential(Base):
     __tablename__ = "user_credentials"
+
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(255), unique=True, index=True)
-    email = Column(String(255), unique=True, index=True)
-    hashed_password = Column(String(255))
-    is_active = Column(Boolean, default=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(100), nullable=False)
+    role = Column(Enum('admin', 'user', name='user_role'), default='user')
+    status = Column(Enum('pending', 'approved', 'rejected', name='user_status'), default='pending')
 
 class ImageProcessedData(Base):
     __tablename__ = "image_processed_data"

@@ -1,7 +1,8 @@
 import os
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.orm import sessionmaker
-from .models import Base
+from backend.base import Base
+from backend.models import UserCredential  # Import the User model here
 from dotenv import load_dotenv
 
 # Load variables from .env
@@ -15,10 +16,15 @@ MYSQL_DB = os.getenv("MYSQL_DB")
 
 DATABASE_URL = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}"
 
-# add the code here
+SQLALCHEMY_DATABASE_URL = DATABASE_URL
 
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, echo=True  # Add echo=True for SQL logging
+)
 
-engine = create_engine(DATABASE_URL)
+# Ensure tables are created immediately after engine is defined
+Base.metadata.create_all(bind=engine)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 metadata = MetaData()
 
@@ -28,5 +34,3 @@ def get_db():
         yield db
     finally:
         db.close()
-
-Base.metadata.create_all(bind=engine)

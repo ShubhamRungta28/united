@@ -24,10 +24,16 @@ function LoginPage() {
         setError('');
         try {
             const data = await authService.login(username, password);
-            login(data.access_token, { username }); // Assuming user data for context
-            navigate('/home'); // Redirect to the new home page after login
+            login(data.access_token); // Pass only the token now
+            navigate('/dashboard'); // Redirect to dashboard after login
         } catch (err) {
-            setError(err.message);
+            if (err.message.includes("pending")) {
+                setError("Your account is pending approval by an administrator. Please wait.");
+            } else if (err.message.includes("rejected")) {
+                setError("Your account has been rejected. Please contact an administrator.");
+            } else {
+                setError(err.message);
+            }
         }
     };
 

@@ -2,16 +2,23 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import os
 
 from backend.routers import auth
 from backend.routers import user
 from backend.routers import image_processing
+from backend.database import engine, Base
+from backend.models import UserCredential
 
 
 
 
 
 app = FastAPI(debug=True)
+
+# Load environment variables from .env file
+load_dotenv()
 
 origins = [
     "http://localhost:5174",

@@ -68,8 +68,8 @@ function RegisterPage() {
 
         try {
             await authService.register(username, email, password);
-            setSuccess('Registration successful!');
-            navigate('/confirmation'); // Navigate to confirmation page
+            setSuccess('Registration successful! Your account is pending administrator approval.');
+            navigate('/confirmation'); // Navigate to confirmation page, or perhaps directly to login with a message
         } catch (err) {
             setError(err.message);
         }

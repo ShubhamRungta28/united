@@ -8,7 +8,7 @@ import sys
 import mimetypes # Import mimetypes
 
 # Initialize Mistral client with API key
-API_KEY = 'rrENEIP4CNCLjIyGyG9YGbgGXgMvcWPo'
+API_KEY = 'WRBAeJ7igGEzgcEFRBKKezTrKyNCiUcH'
 client = Mistral(api_key=API_KEY)
 
 # === Encode image ===
@@ -87,3 +87,63 @@ if __name__ == "__main__":
 
     extracted_data = process_single_image(image_path)
     write_extracted_data_to_file(extracted_data, output_filename)
+
+
+# import os
+# import re
+# import base64
+# import requests
+# from mistralai import Mistral
+# import mimetypes
+
+# API_KEY = 'WRBAeJ7igGEzgcEFRBKKezTrKyNCiUcH'  # Replace with your real key
+# client = Mistral(api_key=API_KEY)
+
+# # === Extract name, phone, address, tracking number ===
+# def extract_details(ocr_text):
+#     normalized_text = re.sub(r"[*#]+", "", ocr_text)
+#     normalized_text = re.sub(r"(SHIP[\s_]*TO)[:\-]", "SHIP TO", normalized_text, flags=re.IGNORECASE)
+
+#     ship_to_match = re.search(
+#         r"SHIP TO\s*(.*?)(?=\n(?:UPS|TRACKING|1Z|TILLING|COD|BILLING|REFERENCE|\Z))",
+#         normalized_text, re.IGNORECASE | re.DOTALL
+#     )
+#     ship_to_block = ship_to_match.group(1).strip() if ship_to_match else "Not found"
+#     ship_to_lines = [line.strip() for line in ship_to_block.splitlines() if line.strip()]
+
+#     name = ship_to_lines[0] if len(ship_to_lines) > 0 else "Not found"
+#     phone = ship_to_lines[1] if len(ship_to_lines) > 1 else "Not found"
+#     address = ", ".join(ship_to_lines[2:]) if len(ship_to_lines) > 2 else "Not found"
+
+#     tracking_match = re.search(r"\b1Z[\s\dA-Z]{10,}\b", normalized_text, re.IGNORECASE)
+#     tracking_number = tracking_match.group(0).replace(" ", "").upper() if tracking_match else "Not found"
+
+#     return name, phone, address, tracking_number
+
+# # === Upload file temporarily (to file.io or any free API) ===
+# def upload_temp_image(image_path):
+#     with open(image_path, 'rb') as f:
+#         response = requests.post('https://file.io', files={'file': f})
+#         if response.status_code == 200:
+#             return response.json()['link']
+#         else:
+#             raise Exception("File upload failed.")
+
+# # === OCR pipeline ===
+# def process_image(image_path):
+#     try:
+#         image_url = upload_temp_image(image_path)
+#         print(f"Uploaded to: {image_url}")
+
+#         ocr_response = client.ocr.process(
+#             model="mistral-ocr-latest",
+#             document={
+#                 "type": "document_url",
+#                 "document_url": image_url
+#             }
+#         )
+#         ocr_text = ocr_response.pages[0].markdown
+#         return extract_details(ocr_text)
+
+#     except Exception as e:
+#         raise RuntimeError(f"❌ Error processing image: {e}")

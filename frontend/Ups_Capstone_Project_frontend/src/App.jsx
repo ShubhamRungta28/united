@@ -168,7 +168,7 @@ function App() {
                     <UploadPage />
                   </ProtectedRoute>
                 } />
-                <Route path="/dashboard" element={
+                <Route path="/dashboard/*" element={
                   <ProtectedRoute>
                     <DashboardPage />
                   </ProtectedRoute>

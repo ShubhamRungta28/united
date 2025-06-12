@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { jwtDecode } from 'jwt-decode';
 
 const AuthContext = createContext(null);
 
@@ -7,20 +8,44 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
 
     useEffect(() => {
-        // Check for token in localStorage on initial load
         const token = localStorage.getItem('access_token');
         if (token) {
-            setIsAuthenticated(true);
-            // In a real app, you'd decode the token or fetch user data
-            // For now, let's just assume a generic user if token exists
-            setUser({ username: 'Authenticated User' }); 
+            try {
+                const decodedToken = jwtDecode(token);
+                // Check token expiry
+                if (decodedToken.exp * 1000 > Date.now()) {
+                    setIsAuthenticated(true);
+                    setUser({ 
+                        username: decodedToken.sub,
+                        email: decodedToken.email,
+                        role: decodedToken.role,
+                        status: decodedToken.status
+                    });
+                } else {
+                    // Token expired
+                    localStorage.removeItem('access_token');
+                    setIsAuthenticated(false);
+                    setUser(null);
+                }
+            } catch (error) {
+                console.error("Failed to decode token:", error);
+                localStorage.removeItem('access_token');
+                setIsAuthenticated(false);
+                setUser(null);
+            }
         }
     }, []);
 
-    const login = (token, userData) => {
+    const login = (token) => {
         localStorage.setItem('access_token', token);
+        const decodedToken = jwtDecode(token);
         setIsAuthenticated(true);
-        setUser(userData);
+        setUser({
+            username: decodedToken.sub,
+            email: decodedToken.email,
+            role: decodedToken.role,
+            status: decodedToken.status
+        });
     };
 
     const logout = () => {
@@ -29,8 +54,11 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
     };
 
+    const isAdmin = user && user.role === 'admin';
+    const isApproved = user && user.status === 'approved';
+
     return (
-        <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
+        <AuthContext.Provider value={{ isAuthenticated, user, login, logout, isAdmin, isApproved }}>
             {children}
         </AuthContext.Provider>
     );

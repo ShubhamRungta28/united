@@ -7,9 +7,11 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
-from ..database import get_db
-from ..schemas import TokenData
-from ..models import UserCredential
+from backend.database import get_db
+from backend.schemas import TokenData, UserCredentialSchema
+from backend.models import UserCredential
+
+from backend.auth.utils import SECRET_KEY, ALGORITHM, decode_access_token
 
 # to get a string like this run:
 # openssl rand -hex 32
@@ -61,14 +63,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        token_data = TokenData(username=username)
-    except InvalidTokenError:
+    payload = decode_access_token(token)
+    if payload is None:
         raise credentials_exception
+    username: str = payload.get("sub")
+    if username is None:
+        raise credentials_exception
+    token_data = TokenData(username=username)
 
     user = db.query(UserCredential).filter(UserCredential.username == token_data.username).first()
     if user is None:
@@ -77,4 +78,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 
 async def get_current_active_user(current_user: UserCredential = Depends(get_current_user)):
+    if current_user.status != "approved":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account not approved")
+    return current_user
+
+
+async def get_current_admin_user(current_user: UserCredential = Depends(get_current_active_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not an admin user")
     return current_user 

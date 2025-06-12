@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Container, 
   Paper, 
@@ -20,22 +20,32 @@ import {
   IconButton,
   CircularProgress,
   Alert,
-  Pagination
+  Pagination,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  MenuItem
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import { JsonToTable } from 'react-json-to-table';
+import { useAuth } from '../auth/AuthContext'; // Import useAuth
+import api from '../utils/api'; // Import the custom API axios instance
 
 const DashboardPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user, isAdmin, isApproved } = useAuth(); // Get user, isAdmin, isApproved from AuthContext
 
   const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [loadingRecords, setLoadingRecords] = useState(false);
+  const [errorRecords, setErrorRecords] = useState(null);
+  const [pageRecords, setPageRecords] = useState(1);
+  const [pageSizeRecords, setPageSizeRecords] = useState(10);
   const [totalRecords, setTotalRecords] = useState(0);
-  const [filters, setFilters] = useState({
+  const [filtersRecords, setFiltersRecords] = useState({
     name: '',
     city: '',
     number: '',
@@ -44,74 +54,155 @@ const DashboardPage = () => {
     tracking_id: '',
   });
 
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [errorUsers, setErrorUsers] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [openConfirmDialog, setOpenConfirmDialog] = useState(false);
+  const [actionType, setActionType] = useState(''); // 'approve', 'reject', 'delete'
+  const [openAddUserDialog, setOpenAddUserDialog] = useState(false); // New state for Add User dialog
+  const [newUser, setNewUser] = useState({
+    username: '',
+    email: '',
+    password: '',
+    role: 'user', // Default role
+    status: 'pending', // Default status
+  });
+
   const navTabs = [
     { label: 'Upload', path: '/upload' },
     { label: 'Dashboard', path: '/dashboard' },
     { label: 'Analytics', path: '/analytics' },
   ];
 
-  const [currentTab, setCurrentTab] = useState(navTabs[1].path); // Dashboard is the second tab
+  if (isAdmin) {
+    navTabs.push({ label: 'User Management', path: '/dashboard/users' });
+  }
 
   const handleTabChange = (event, newValue) => {
-    setCurrentTab(newValue);
     navigate(newValue);
   };
 
   const fetchRecords = async () => {
-    setLoading(true);
-    setError(null);
+    setLoadingRecords(true);
+    setErrorRecords(null);
     try {
       const queryParams = new URLSearchParams({
-        page: page,
-        size: pageSize,
+        page: pageRecords,
+        size: pageSizeRecords,
       });
 
-      for (const key in filters) {
-        if (filters[key]) {
-          queryParams.append(key, filters[key]);
+      for (const key in filtersRecords) {
+        if (filtersRecords[key]) {
+          queryParams.append(key, filtersRecords[key]);
         }
       }
 
-      const response = await fetch(`http://localhost:8000/upload-records/?${queryParams.toString()}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      setRecords(data.items);
-      setTotalRecords(data.total);
+      const response = await api.get(`/upload-records/?${queryParams.toString()}`);
+      setRecords(response.data.items);
+      setTotalRecords(response.data.total);
     } catch (err) {
-      setError("Failed to fetch records: " + err.message);
+      setErrorRecords("Failed to fetch records: " + (err.response?.data?.detail || err.message));
       setRecords([]);
       setTotalRecords(0);
     } finally {
-      setLoading(false);
+      setLoadingRecords(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    setErrorUsers(null);
+    try {
+      const response = await api.get('/users/');
+      setUsers(response.data);
+    } catch (err) {
+      setErrorUsers("Failed to fetch users: " + (err.response?.data?.detail || err.message));
+      setUsers([]);
+    } finally {
+      setLoadingUsers(false);
     }
   };
 
   useEffect(() => {
-    fetchRecords();
-  }, [page, pageSize, filters]); // Re-fetch when page, size, or filters change
+    if (location.pathname === '/dashboard') {
+      fetchRecords();
+    } else if (location.pathname === '/dashboard/users' && isAdmin) {
+      fetchUsers();
+    }
+  }, [location.pathname, isAdmin, pageRecords, pageSizeRecords, filtersRecords]);
 
-  const handleFilterChange = (e) => {
+  const handleFilterChangeRecords = (e) => {
     const { name, value } = e.target;
-    setFilters(prevFilters => ({ ...prevFilters, [name]: value }));
-    setPage(1); // Reset to first page on filter change
+    setFiltersRecords(prevFilters => ({ ...prevFilters, [name]: value }));
+    setPageRecords(1); // Reset to first page on filter change
   };
 
-  const handleClearFilter = (filterName) => {
-    setFilters(prevFilters => ({ ...prevFilters, [filterName]: '' }));
-    setPage(1); // Reset to first page on filter change
+  const handleClearFilterRecords = (filterName) => {
+    setFiltersRecords(prevFilters => ({ ...prevFilters, [filterName]: '' }));
+    setPageRecords(1); // Reset to first page on filter change
   };
 
-  const handlePageChange = (event, value) => {
-    setPage(value);
+  const handlePageChangeRecords = (event, value) => {
+    setPageRecords(value);
   };
+
+  const handleOpenConfirmDialog = (user, type) => {
+    setSelectedUser(user);
+    setActionType(type);
+    setOpenConfirmDialog(true);
+  };
+
+  const handleCloseConfirmDialog = () => {
+    setOpenConfirmDialog(false);
+    setSelectedUser(null);
+    setActionType('');
+  };
+
+  const handleConfirmAction = async () => {
+    if (!selectedUser) return;
+
+    try {
+      if (actionType === 'approve') {
+        await api.put(`/users/approve/${selectedUser.id}`);
+      } else if (actionType === 'reject') {
+        await api.put(`/users/reject/${selectedUser.id}`);
+      } else if (actionType === 'delete') {
+        await api.delete(`/users/${selectedUser.id}`);
+      }
+      fetchUsers(); // Refresh the user list
+      handleCloseConfirmDialog();
+    } catch (err) {
+      setErrorUsers("Action failed: " + (err.response?.data?.detail || err.message));
+      handleCloseConfirmDialog();
+    }
+  };
+
+  const handleAddUser = async () => {
+    try {
+      const response = await api.post('/users/', newUser);
+      setUsers([...users, response.data]);
+      setOpenAddUserDialog(false);
+    } catch (err) {
+      setErrorUsers("Failed to add user: " + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  if (!isApproved) {
+    return (
+      <Container maxWidth="md" sx={{ mt: 8 }}>
+        <Alert severity="warning">
+          Your account is currently {user?.status}. Access to the dashboard is restricted until your account is approved by an administrator.
+        </Alert>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg">
       <Box sx={{ width: '100%', mb: 4 }}>
         <Tabs 
-          value={currentTab} 
+          value={location.pathname}
           onChange={handleTabChange} 
           aria-label="navigation tabs"
           variant="fullWidth"
@@ -135,6 +226,7 @@ const DashboardPage = () => {
         </Tabs>
       </Box>
 
+      {location.pathname === '/dashboard' && (
       <Paper elevation={3} sx={{ mt: 2, p: 4 }}>
         <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
           Extracted Records History
@@ -143,20 +235,20 @@ const DashboardPage = () => {
         <Box sx={{ mb: 3 }}>
           <Typography variant="h6" gutterBottom>Filters</Typography>
           <Grid container spacing={2}>
-            {Object.keys(filters).map((key) => (
+              {Object.keys(filtersRecords).map((key) => (
               <Grid item xs={12} sm={6} md={4} key={key}>
                 <TextField
                   fullWidth
                   label={key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
                   name={key}
-                  value={filters[key]}
-                  onChange={handleFilterChange}
+                    value={filtersRecords[key]}
+                    onChange={handleFilterChangeRecords}
                   variant="outlined"
                   size="small"
                   InputProps={{
-                    endAdornment: filters[key] && (
+                      endAdornment: filtersRecords[key] && (
                       <InputAdornment position="end">
-                        <IconButton onClick={() => handleClearFilter(key)} size="small">
+                          <IconButton onClick={() => handleClearFilterRecords(key)} size="small">
                           <ClearIcon />
                         </IconButton>
                       </InputAdornment>
@@ -168,91 +260,266 @@ const DashboardPage = () => {
           </Grid>
         </Box>
 
-        {loading && (
+          {loadingRecords && (
           <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
             <CircularProgress />
             <Typography variant="body1" sx={{ ml: 2 }}>Loading records...</Typography>
           </Box>
         )}
 
-        {error && (
-          <Alert severity="error" sx={{ my: 4 }}>
-            {error}
-          </Alert>
-        )}
+          {errorRecords && (
+            <Alert severity="error" sx={{ my: 4 }}>
+              {errorRecords}
+            </Alert>
+          )}
 
-        {!loading && !error && records.length === 0 && (
-          <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', my: 4 }}>
-            No records found. Adjust your filters or upload a label.
-          </Typography>
-        )}
+          {!loadingRecords && !errorRecords && records.length === 0 && (
+            <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', my: 4 }}>
+              No records found. Adjust your filters or upload a label.
+            </Typography>
+          )}
 
-        {!loading && records.length > 0 && (
-          <TableContainer component={Paper} elevation={1} sx={{ mb: 3 }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: 'primary.light', '& th': { color: 'common.white', fontWeight: 'bold' } }}>
-                  <TableCell>Uploaded Time</TableCell>
-                  <TableCell>Tracking ID</TableCell>
-                  <TableCell>Address</TableCell>
-                  <TableCell>Name</TableCell>
-                  <TableCell>City</TableCell>
-                  <TableCell>Pincode</TableCell>
-                  <TableCell>Country</TableCell>
-                  <TableCell>Upload Status</TableCell>
-                  <TableCell>Extract Status</TableCell>
-                  <TableCell>Extracted Info</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {records.map((record) => (
-                  <TableRow key={record.id} hover>
-                    <TableCell>{new Date(record.upload_timestamp).toLocaleString()}</TableCell>
-                    <TableCell>{record.tracking_id || 'N/A'}</TableCell>
-                    <TableCell>{record.address || 'N/A'}</TableCell>
-                    <TableCell>{record.name || 'N/A'}</TableCell>
-                    <TableCell>{record.city || 'N/A'}</TableCell>
-                    <TableCell>{record.pincode || 'N/A'}</TableCell>
-                    <TableCell>{record.country || 'N/A'}</TableCell>
-                    <TableCell>{record.upload_status}</TableCell>
-                    <TableCell>{record.extract_status}</TableCell>
-                    <TableCell>
-                      {record.extracted_info ? (
-                        <Box sx={{ maxHeight: 100, overflowY: 'auto' }}>
-                           <JsonToTable json={record.extracted_info} />
-                        </Box>
-                      ) : (
-                        'N/A'
-                      )}
-                    </TableCell>
+          {!loadingRecords && records.length > 0 && (
+            <TableContainer component={Paper} elevation={1} sx={{ mb: 3 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'primary.light', '& th': { color: 'common.white', fontWeight: 'bold' } }}>
+                    <TableCell>Uploaded Time</TableCell>
+                    <TableCell>Tracking ID</TableCell>
+                    <TableCell>Address</TableCell>
+                    <TableCell>Name</TableCell>
+                    <TableCell>City</TableCell>
+                    <TableCell>Pincode</TableCell>
+                    <TableCell>Country</TableCell>
+                    <TableCell>Upload Status</TableCell>
+                    <TableCell>Extract Status</TableCell>
+                    <TableCell>Extracted Info</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
+                </TableHead>
+                <TableBody>
+                  {records.map((record) => (
+                    <TableRow key={record.id} hover>
+                      <TableCell>{new Date(record.upload_timestamp).toLocaleString()}</TableCell>
+                      <TableCell>{record.tracking_id || 'N/A'}</TableCell>
+                      <TableCell>{record.address || 'N/A'}</TableCell>
+                      <TableCell>{record.name || 'N/A'}</TableCell>
+                      <TableCell>{record.city || 'N/A'}</TableCell>
+                      <TableCell>{record.pincode || 'N/A'}</TableCell>
+                      <TableCell>{record.country || 'N/A'}</TableCell>
+                      <TableCell>{record.upload_status}</TableCell>
+                      <TableCell>{record.extract_status}</TableCell>
+                      <TableCell>
+                        {record.extracted_info ? (
+                          <Box sx={{ maxHeight: 100, overflowY: 'auto' }}>
+                             <JsonToTable json={record.extracted_info} />
+                          </Box>
+                        ) : (
+                          'N/A'
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
 
-        {!loading && totalRecords > pageSize && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-            <Pagination
-              count={Math.ceil(totalRecords / pageSize)}
-              page={page}
-              onChange={handlePageChange}
-              color="primary"
-              size="large"
-            />
+          {!loadingRecords && totalRecords > pageSizeRecords && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+              <Pagination
+                count={Math.ceil(totalRecords / pageSizeRecords)}
+                page={pageRecords}
+                onChange={handlePageChangeRecords}
+                color="primary"
+                size="large"
+              />
+            </Box>
+          )}
+
+          <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'flex-end' }}>
+            <Button variant="contained" color="secondary" onClick={() => navigate('/upload')}>
+              Go to Upload
+            </Button>
           </Box>
-        )}
+        </Paper>
+      )}
 
-        <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'flex-end' }}>
-          <Button variant="contained" color="secondary" onClick={() => navigate('/upload')}>
-            Go to Upload
+      {location.pathname === '/dashboard/users' && isAdmin && (
+        <Paper elevation={3} sx={{ mt: 2, p: 4 }}>
+          <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold', mb: 3 }}>
+            User Management
+          </Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => setOpenAddUserDialog(true)}
+            sx={{ mb: 3 }}
+          >
+            Add New User
           </Button>
-          <Button variant="outlined" color="primary" onClick={() => navigate('/analytics')}>
-            Go to Analytics
-          </Button>
-        </Box>
-      </Paper>
+          {loadingUsers && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+              <CircularProgress />
+              <Typography variant="body1" sx={{ ml: 2 }}>Loading users...</Typography>
+            </Box>
+          )}
+          {errorUsers && (
+            <Alert severity="error" sx={{ mb: 2 }}>{errorUsers}</Alert>
+          )}
+          {!loadingUsers && !errorUsers && users.length === 0 && (
+            <Typography>No users found.</Typography>
+          )}
+          {!loadingUsers && !errorUsers && users.length > 0 && (
+            <TableContainer component={Paper} elevation={1} sx={{ mt: 3 }}>
+              <Table aria-label="users table">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Username</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Email</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Role</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>{user.username}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>{user.role}</TableCell>
+                      <TableCell>{user.status}</TableCell>
+                      <TableCell>
+                        {user.status === 'pending' && (
+                          <>
+                            <Button
+                              variant="contained"
+                              color="success"
+                              size="small"
+                              sx={{ mr: 1 }}
+                              onClick={() => handleOpenConfirmDialog(user, 'approve')}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              size="small"
+                              onClick={() => handleOpenConfirmDialog(user, 'reject')}
+                            >
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                        {user.status !== 'pending' && (
+                            <Button
+                                variant="outlined"
+                                color="error"
+                                size="small"
+                                onClick={() => handleOpenConfirmDialog(user, 'delete')}
+                            >
+                                Delete
+                            </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+          <Dialog
+            open={openConfirmDialog}
+            onClose={handleCloseConfirmDialog}
+            aria-labelledby="confirm-dialog-title"
+            aria-describedby="confirm-dialog-description"
+          >
+            <DialogTitle id="confirm-dialog-title">
+              {actionType === 'approve' ? 'Approve User' : actionType === 'reject' ? 'Reject User' : 'Delete User'}
+            </DialogTitle>
+            <DialogContent>
+              <DialogContentText id="confirm-dialog-description">
+                Are you sure you want to {actionType} user "{selectedUser?.username}"? This action cannot be undone.
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseConfirmDialog}>Cancel</Button>
+              <Button onClick={handleConfirmAction} autoFocus color={actionType === 'delete' ? 'error' : 'primary'}>
+                {actionType === 'approve' ? 'Approve' : actionType === 'reject' ? 'Reject' : 'Delete'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Add User Dialog */}
+          <Dialog open={openAddUserDialog} onClose={() => setOpenAddUserDialog(false)}>
+            <DialogTitle>Add New User</DialogTitle>
+            <DialogContent>
+              <TextField
+                autoFocus
+                margin="dense"
+                label="Username"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={newUser.username}
+                onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                margin="dense"
+                label="Email"
+                type="email"
+                fullWidth
+                variant="outlined"
+                value={newUser.email}
+                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                margin="dense"
+                label="Password"
+                type="password"
+                fullWidth
+                variant="outlined"
+                value={newUser.password}
+                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                select
+                margin="dense"
+                label="Role"
+                fullWidth
+                variant="outlined"
+                value={newUser.role}
+                onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                sx={{ mb: 2 }}
+              >
+                <MenuItem value="admin">Admin</MenuItem>
+                <MenuItem value="user">User</MenuItem>
+                <MenuItem value="pending">Pending</MenuItem>
+              </TextField>
+              <TextField
+                select
+                margin="dense"
+                label="Status"
+                fullWidth
+                variant="outlined"
+                value={newUser.status}
+                onChange={(e) => setNewUser({ ...newUser, status: e.target.value })}
+                sx={{ mb: 2 }}
+              >
+                <MenuItem value="pending">Pending</MenuItem>
+                <MenuItem value="approved">Approved</MenuItem>
+                <MenuItem value="rejected">Rejected</MenuItem>
+              </TextField>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setOpenAddUserDialog(false)}>Cancel</Button>
+              <Button onClick={handleAddUser} variant="contained" color="primary">Add User</Button>
+            </DialogActions>
+          </Dialog>
+        </Paper>
+      )}
     </Container>
   );
 };
