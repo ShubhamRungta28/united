@@ -33,8 +33,13 @@ const theme = createTheme({
       dark: '#D63031',
     },
   },
-  typography: {
+  graphy: {
     fontFamily: 'sans-serif, "Inter", "Roboto", "Helvetica", "Arial"',
+    fontWeightLight: 300,
+    fontWeightRegular: 400,
+    fontWeightMedium: 500,
+    fontWeightBold: 700,
+
     h1: {
       fontWeight: 700,
       letterSpacing: '-0.02em',

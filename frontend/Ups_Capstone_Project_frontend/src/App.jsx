@@ -154,12 +154,30 @@ function App() {
               onClose={handleMenuClose}
               MenuListProps={{ 'aria-labelledby': 'basic-button' }}
             >
-              {navItems.map((item) => (
-                <MenuItem key={item.label} onClick={() => handleMenuItemClick(item.path)}>
-                  <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText>{item.label}</ListItemText>
+              {navItems.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <MenuItem
+                  key={item.label}
+                  onClick={() => handleMenuItemClick(item.path)}
+                  sx={{
+                    fontWeight: isActive ? 'bold' : 'normal',
+                    textDecoration: isActive ? 'underline' : 'none',
+                    color: isActive ? 'primary.main' : 'text.primary',
+                  }}
+                >
+                  <ListItemIcon
+                    sx={{
+                      color: isActive ? 'primary.main' : 'inherit',
+                    }}
+                  >
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText primary={item.label} />
                 </MenuItem>
-              ))}
+              );
+            })}
+
               <MenuItem onClick={handleLogout}>
                 <ListItemIcon>
                   <ExitToAppIcon />
